@@ -45,17 +45,25 @@ try:
 except Exception as e:
     print("Error al buscar el parámetro 1304 (Puerto SMTP) en PARAMETROS:", e)
 
-try:   
+try:
+    cursor.execute("SELECT CADENA FROM PARAMETROS WHERE CODIGO=1316")
+    registro = cursor.fetchone()
+    if registro:
+        email_remitente = registro.CADENA
+    else:
+        print("No se encontró el parámetro 1316 (Usuario del remitente).")
+except Exception as e:
+    print("Error al buscar el parámetro 1316 (Usuario del remitente) en PARAMETROS:", e)
+
+try:
     cursor.execute("SELECT CADENA FROM PARAMETROS WHERE CODIGO=9017")
     registro = cursor.fetchone()
-    if registro:       
+    if registro:
         contraseña_remitente = registro.CADENA
     else:
         print("No se encontró el parámetro 9017 (Contraseña del remitente).")
 except Exception as e:
     print("Error al buscar el parámetro 9017 (Contraseña del remitente) en PARAMETROS:", e)
-
-email_remitente = 'franciscorey98@gmail.com'
 
 def enviar_email(destinatario, asunto, cuerpo, archivo_adjunto=None):
     email = MIMEMultipart()
@@ -92,9 +100,24 @@ def main():
                 asunto = registro.ASU
                 cuerpo = registro.CUE
                 archivo_adjunto = registro.ADJ
-                #sent_datetime = datetime.datetime.now()       
-                #sent_date = sent_time.date()
-                #sent_time = sent_time.time()
+                sent_datetime = datetime.datetime.now()
+
+                fecha_envio = sent_datetime.date()
+                print(fecha_envio)
+                fecha1 = datetime.date(1801, 1, 1)
+                cantidad_dias=(fecha_envio-fecha1)
+                print("cantidad_dias=", cantidad_dias.days+4)
+
+                hora = (sent_datetime.hour) * 60 * 6001
+                minuto = (sent_datetime.minute) * 6001
+                segundo = sent_datetime.second * 100
+                tiempo_envio=hora+minuto+segundo
+                print("Hour:", hora)
+                print("Minute:", minuto)
+                print("Second:", segundo)
+                print("tiempo_envio=", tiempo_envio)
+
+
                 enviar_email(destinatario, asunto, cuerpo, archivo_adjunto)
 
                 cursor.execute(f"UPDATE EMAILSLOG SET EST=1 WHERE ANR={registro.ANR}")
