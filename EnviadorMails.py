@@ -1,3 +1,4 @@
+import os
 import time
 import datetime
 # Conexión SQL
@@ -26,75 +27,77 @@ except Exception as e:
 
 try:   
     cursor.execute("SELECT CADENA FROM PARAMETROS WHERE CODIGO=1303")
-    row = cursor.fetchone()
-    if row:       
-        smtp_server = row.CADENA
+    registro = cursor.fetchone()
+    if registro:       
+        servidor_smtp = registro.CADENA
     else:
-        print("SMTP server with parameter number 1303 not found")
+        print("No se encontró el parámetro 1303 (Servidor SMTP).")
 except Exception as e:
-    print("Error al buscar el parámetro 1303 (SMTP SERVER) en PARAMETROS:", e)
+    print("Error al buscar el parámetro 1303 (Servidor SMTP) en PARAMETROS:", e)
 
 try:   
     cursor.execute("SELECT NUMERO FROM PARAMETROS WHERE CODIGO=1304")
-    row = cursor.fetchone()
-    if row:       
-        smtp_port = int(row.NUMERO)
+    registro = cursor.fetchone()
+    if registro:       
+        puerto_smtp = int(registro.NUMERO)
     else:
-        print("El puerto en el parámetro 1304 no fue encontrado.")
+        print("No se encontró el parámetro 1304 (Puerto SMTP).")
 except Exception as e:
-    print("Error al buscar el parámetro 1304 (puerto) en PARAMETROS:", e)
+    print("Error al buscar el parámetro 1304 (Puerto SMTP) en PARAMETROS:", e)
 
 try:   
     cursor.execute("SELECT CADENA FROM PARAMETROS WHERE CODIGO=9017")
-    row = cursor.fetchone()
-    if row:       
-        sender_password = row.CADENA
+    registro = cursor.fetchone()
+    if registro:       
+        contraseña_remitente = registro.CADENA
     else:
-        print("Contraseña no encontrada en el parámetro 9017.")
+        print("No se encontró el parámetro 9017 (Contraseña del remitente).")
 except Exception as e:
-    print("Error al buscar el parámetro 9017 (contraseña) en PARAMETROS:", e)
+    print("Error al buscar el parámetro 9017 (Contraseña del remitente) en PARAMETROS:", e)
 
-sender_email = 'franciscorey98@gmail.com'
+email_remitente = 'franciscorey98@gmail.com'
 
-def send_email(destinatario, subject, body, attachment_path=None):
-    msg = MIMEMultipart()
-    msg['Subject'] = subject
-    msg['From'] = sender_email
-    msg['To'] = destinatario
+def enviar_email(destinatario, asunto, cuerpo, archivo_adjunto=None):
+    email = MIMEMultipart()
+    email['Subject'] = asunto
+    email['From'] = email_remitente
+    email['To'] = destinatario
 
-    msg.attach(MIMEText(body))
+    email.attach(MIMEText(cuerpo))
 
-    if attachment_path:
-        with open(attachment_path, 'rb') as attachment:
-            part = MIMEBase('application', 'octet-stream')
-            part.set_payload(attachment.read())
-        encoders.encode_base64(part)
-        part.add_header('Content-Disposition', f'attachment; filename= {attachment_path}')
-        msg.attach(part)
+    if archivo_adjunto:
+        with open(archivo_adjunto, 'rb') as arch_adj:
+            adjunto = MIMEBase('application', 'octet-stream')
+            adjunto.set_payload(arch_adj.read())
+        encoders.encode_base64(adjunto)
+        adjunto.add_header('Content-Disposition', f'attachment; filename= {os.path.basename(archivo_adjunto)}')
+        email.attach(adjunto)
 
-    with smtplib.SMTP(smtp_server, smtp_port) as server:
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.sendmail(sender_email, destinatario, msg.as_string())
+    try:
+        with smtplib.SMTP(servidor_smtp, puerto_smtp) as servidor:
+            servidor.starttls()
+            servidor.login(email_remitente, contraseña_remitente)
+            servidor.sendmail(email_remitente, destinatario, email.as_string())
+    except Exception as e:
+        print("Error al enviar el mail:", e)
 
 def main():
     while True:
         try:
-            # Query for records with "Sent" column equals 0
             cursor.execute(f"SELECT ANR, DST, ASU, CUE, ADJ FROM EMAILSLOG WHERE EST=0")
-            rows = cursor.fetchall()
+            registros = cursor.fetchall()
 
-            for row in rows:
-                email_destinatario = row.DST
-                email_subject = row.ASU
-                email_body = row.CUE
-                email_attachment = row.ADJ
+            for registro in registros:
+                destinatario = registro.DST
+                asunto = registro.ASU
+                cuerpo = registro.CUE
+                archivo_adjunto = registro.ADJ
                 #sent_datetime = datetime.datetime.now()       
                 #sent_date = sent_time.date()
                 #sent_time = sent_time.time()
-                send_email(email_destinatario, email_subject, email_body, email_attachment)
+                enviar_email(destinatario, asunto, cuerpo, archivo_adjunto)
 
-                cursor.execute(f"UPDATE EMAILSLOG SET EST=1 WHERE ANR={row.ANR}")
+                cursor.execute(f"UPDATE EMAILSLOG SET EST=1 WHERE ANR={registro.ANR}")
                 conn.commit()
 
             # Debería hacer el close acá o al salir del While?
@@ -102,14 +105,14 @@ def main():
         except Exception as e:
             print("2 - Error al enviar el mail:", e) 
 
-            error_code = e.args[0] if e.args else None
-            if error_code == 2:
-                error_message = "Verifique la existencia del archivo adjunto."
+            codigo_error = e.args[0] if e.args else None
+            if codigo_error == 2:
+                mensaje_error = "Verifique la existencia del archivo adjunto."
             else:
-                error_message = e.args[1]
+                mensaje_error = e.args[1]
 
             try:
-                cursor.execute(f"UPDATE EMAILSLOG SET EST=?, ERRCOD=?, ERRDES=? WHERE ANR={row.ANR}", (12, error_code, error_message))     
+                cursor.execute(f"UPDATE EMAILSLOG SET EST=?, ERRCOD=?, ERRDES=? WHERE ANR={registro.ANR}", (12, codigo_error, mensaje_error))     
                 conn.commit()
             except Exception as e:
                 print("3 - Error al modificar el registro en EMAILSLOG:", e)    
