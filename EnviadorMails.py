@@ -115,9 +115,7 @@ def enviar_email(destinatario, asunto, cuerpo, archivo_adjunto=None):
             servidor.starttls()
             servidor.login(email_remitente, contraseña_remitente)
             servidor.sendmail(email_remitente, destinatario, email.as_string())
-        
-        cursor.execute(f"UPDATE EMAILSLOG SET EST=1 WHERE ANR={registro.ANR}")
-        conn.commit()
+
     except Exception as e:
         print("Error al enviar el mail:", e)
 
@@ -133,7 +131,7 @@ def main():
 
                 fecha_inicial = datetime.date(1800, 12, 28) # En Clarion el 28/12/1800 es la fecha 1
                 fecha_envio_numerico = (envio_fecha_hora.date() - fecha_inicial)
-                
+
                 # En Clarion 1 minuto equivale a 6001.
                 # Para obtener la hora hay que multiplicar 6001 x 60 x Cantidad Horas 
                 # Para obtener los minutos hay que multiplicar 6001 x Cantidad Minutos
@@ -141,9 +139,9 @@ def main():
                 tiempo_envio = ((envio_fecha_hora.hour) * 60 * 6001) + ((envio_fecha_hora.minute) * 6001) + (envio_fecha_hora.second * 100)
 
                 try:
-                    cursor.execute(f"UPDATE EMAILSLOG SET EST=99, ENVFEC=?, ENVHOR=? WHERE ANR={registro.ANR}", fecha_envio_numerico, tiempo_envio)
+                    cursor.execute(f"UPDATE EMAILSLOG SET EST=99, ENVFEC=?, ENVHOR=? WHERE ANR={registro.ANR}", fecha_envio_numerico.days, tiempo_envio)
                 except Exception as e:
-                    print("Error al intentar actualizar el estado del registro al estado 99 (en proceso) y cambiar hora y fecha")
+                    print("Error al intentar actualizar el estado del registro al estado 99 (en proceso) y cambiar hora y fecha:", e)
 
                 destinatario = registro.DST
                 asunto = registro.ASU
@@ -151,6 +149,9 @@ def main():
                 archivo_adjunto = registro.ADJ
 
                 enviar_email(destinatario, asunto, cuerpo, archivo_adjunto)
+
+                cursor.execute(f"UPDATE EMAILSLOG SET EST=1 WHERE ANR={registro.ANR}")
+                conn.commit()
 
             # Debería hacer el close acá o al salir del While?
             #conn.close()
