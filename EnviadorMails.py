@@ -1,6 +1,7 @@
 import os
 import time
 import datetime
+import logging
 # Conexión SQL
 import pyodbc
 # Envío de emails
@@ -19,51 +20,79 @@ base_de_datos = 'ADACSCSD'
 usuario = 'EnviadorMails'
 contraseña = 'test123'
 
-try:
+# Configuración de logging
+logging.basicConfig(filename='error.log', level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
+
+try:    
     conn = pyodbc.connect(f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={servidor};DATABASE={base_de_datos};UID={usuario};PWD={contraseña}')
     cursor = conn.cursor()
 except Exception as e:
-    print("Error al conectarse a la base de datos:", e)
+    logging.error("Error al conectarse a la base de datos: %s", e)
+    raise
 
 try:   
     cursor.execute("SELECT CADENA FROM PARAMETROS WHERE CODIGO=1303")
     registro = cursor.fetchone()
-    if registro:       
+    if registro is not None:      
         servidor_smtp = registro.CADENA
+        if not servidor_smtp:
+            raise ValueError("No se cargó el servidor SMTP en el parámetro 1303 (Servidor SMTP).")
     else:
-        print("No se encontró el parámetro 1303 (Servidor SMTP).")
-except Exception as e:
-    print("Error al buscar el parámetro 1303 (Servidor SMTP) en PARAMETROS:", e)
+        raise ValueError("No se encontró el parámetro 1303 (Servidor SMTP).")
+except ValueError as ve:
+    logging.error("Error: %s", ve)
+    raise
+except Exception as e:   
+    logging.error("Error al buscar el parámetro 1303 (Servidor SMTP) en PARAMETROS: %s", ve)
+    raise
 
 try:   
     cursor.execute("SELECT NUMERO FROM PARAMETROS WHERE CODIGO=1304")
     registro = cursor.fetchone()
-    if registro:       
+    if registro is not None:
         puerto_smtp = int(registro.NUMERO)
+        if not puerto_smtp:
+            raise ValueError("No hay puerto SMTP cargado en el parámetro 1304.")           
     else:
-        print("No se encontró el parámetro 1304 (Puerto SMTP).")
+        raise ValueError("No se encontró el parámetro 1304 (Puerto SMTP).")
+except ValueError as ve:
+    logging.error("Error: %s", ve)
+    raise
 except Exception as e:
-    print("Error al buscar el parámetro 1304 (Puerto SMTP) en PARAMETROS:", e)
+    logging.error("Error al buscar el parámetro 1304 (Puerto SMTP) en PARAMETROS: %s", ve)
+    raise
 
 try:
     cursor.execute("SELECT CADENA FROM PARAMETROS WHERE CODIGO=1316")
     registro = cursor.fetchone()
-    if registro:
+    if registro is not None:
         email_remitente = registro.CADENA
+        if not email_remitente:
+            raise ValueError("No se cargó el mail en el parámetro 1316 (Email del remitente).")
     else:
-        print("No se encontró el parámetro 1316 (Usuario del remitente).")
+        raise ValueError("No se encontró el parámetro 1316 (Usuario del remitente).")
+except ValueError as ve:
+    logging.error("Error: %s", ve)
+    raise
 except Exception as e:
-    print("Error al buscar el parámetro 1316 (Usuario del remitente) en PARAMETROS:", e)
+    logging.error("Error al buscar el parámetro 1316 (Usuario del remitente) en PARAMETROS: %s", ve)
+    raise
 
 try:
     cursor.execute("SELECT CADENA FROM PARAMETROS WHERE CODIGO=9017")
     registro = cursor.fetchone()
-    if registro:
+    if registro is not None:
         contraseña_remitente = registro.CADENA
+        if not contraseña_remitente:
+            raise ValueError("No se cargó la contraseña en el parámetro 9017 (Contraseña del remitente).")
     else:
-        print("No se encontró el parámetro 9017 (Contraseña del remitente).")
+        raise ValueError("No se encontró el parámetro 9017 (Contraseña del remitente).")
+except ValueError as ve:
+    logging.error("Error: %s", ve)
+    raise
 except Exception as e:
-    print("Error al buscar el parámetro 9017 (Contraseña del remitente) en PARAMETROS:", e)
+    logging.error("Error al buscar el parámetro 9017 (Contraseña del remitente) en PARAMETROS: %s", e)
+    raise
 
 def enviar_email(destinatario, asunto, cuerpo, archivo_adjunto=None):
     email = MIMEMultipart()
@@ -86,6 +115,9 @@ def enviar_email(destinatario, asunto, cuerpo, archivo_adjunto=None):
             servidor.starttls()
             servidor.login(email_remitente, contraseña_remitente)
             servidor.sendmail(email_remitente, destinatario, email.as_string())
+        
+        cursor.execute(f"UPDATE EMAILSLOG SET EST=1 WHERE ANR={registro.ANR}")
+        conn.commit()
     except Exception as e:
         print("Error al enviar el mail:", e)
 
@@ -96,32 +128,29 @@ def main():
             registros = cursor.fetchall()
 
             for registro in registros:
+
+                envio_fecha_hora = datetime.datetime.now()
+
+                fecha_inicial = datetime.date(1800, 12, 28) # En Clarion el 28/12/1800 es la fecha 1
+                fecha_envio_numerico = (envio_fecha_hora.date() - fecha_inicial)
+                
+                # En Clarion 1 minuto equivale a 6001.
+                # Para obtener la hora hay que multiplicar 6001 x 60 x Cantidad Horas 
+                # Para obtener los minutos hay que multiplicar 6001 x Cantidad Minutos
+                # Para obtener los segundos hay que multiplicar 100 x Cantidad Segundos
+                tiempo_envio = ((envio_fecha_hora.hour) * 60 * 6001) + ((envio_fecha_hora.minute) * 6001) + (envio_fecha_hora.second * 100)
+
+                try:
+                    cursor.execute(f"UPDATE EMAILSLOG SET EST=99, ENVFEC=?, ENVHOR=? WHERE ANR={registro.ANR}", fecha_envio_numerico, tiempo_envio)
+                except Exception as e:
+                    print("Error al intentar actualizar el estado del registro al estado 99 (en proceso) y cambiar hora y fecha")
+
                 destinatario = registro.DST
                 asunto = registro.ASU
                 cuerpo = registro.CUE
                 archivo_adjunto = registro.ADJ
-                sent_datetime = datetime.datetime.now()
-
-                fecha_envio = sent_datetime.date()
-                print(fecha_envio)
-                fecha1 = datetime.date(1801, 1, 1)
-                cantidad_dias=(fecha_envio-fecha1)
-                print("cantidad_dias=", cantidad_dias.days+4)
-
-                hora = (sent_datetime.hour) * 60 * 6001
-                minuto = (sent_datetime.minute) * 6001
-                segundo = sent_datetime.second * 100
-                tiempo_envio=hora+minuto+segundo
-                print("Hour:", hora)
-                print("Minute:", minuto)
-                print("Second:", segundo)
-                print("tiempo_envio=", tiempo_envio)
-
 
                 enviar_email(destinatario, asunto, cuerpo, archivo_adjunto)
-
-                cursor.execute(f"UPDATE EMAILSLOG SET EST=1 WHERE ANR={registro.ANR}")
-                conn.commit()
 
             # Debería hacer el close acá o al salir del While?
             #conn.close()
